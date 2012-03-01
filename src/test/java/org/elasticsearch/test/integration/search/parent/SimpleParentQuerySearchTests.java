@@ -72,10 +72,10 @@ public class SimpleParentQuerySearchTests extends AbstractNodesTests {
                 .endObject().endObject()).execute().actionGet();
 
         // index simple data
-        client.prepareIndex(INDEX, "parent", "p1").setSource("p_field", "p_value1").execute().actionGet();
+        client.prepareIndex("test", "parent", "p1").setSource("p_field", "p_value1", "p_field2", 1).execute().actionGet();
         client.prepareIndex(INDEX, "child", "c1").setSource("c_field", "red").setParent("p1").execute().actionGet();
         client.prepareIndex(INDEX, "child", "c2").setSource("c_field", "yellow").setParent("p1").execute().actionGet();
-        client.prepareIndex(INDEX, "parent", "p2").setSource("p_field", "p_value2").execute().actionGet();
+        client.prepareIndex("test", "parent", "p2").setSource("p_field", "p_value2", "p_field2", 1).execute().actionGet();
         client.prepareIndex(INDEX, "child", "c3").setSource("c_field", "blue").setParent("p2").execute().actionGet();
 
         client.admin().indices().prepareRefresh().execute().actionGet();
@@ -106,6 +106,14 @@ public class SimpleParentQuerySearchTests extends AbstractNodesTests {
         assertThat(searchResponse.failedShards(), equalTo(0));
         assertThat(searchResponse.hits().totalHits(), equalTo(1l));
         assertThat(searchResponse.hits().getAt(0).id(), equalTo("c3"));
+
+        searchResponse = client.prepareSearch("test").setQuery(constantScoreQuery(hasParentFilter("parent", termQuery("p_field2", 1)))).execute().actionGet();
+        assertThat("Failures " + Arrays.toString(searchResponse.shardFailures()), searchResponse.shardFailures().length, equalTo(0));
+        assertThat(searchResponse.failedShards(), equalTo(0));
+        assertThat(searchResponse.hits().totalHits(), equalTo(3l));
+        assertThat(searchResponse.hits().getAt(0).id(), anyOf(equalTo("c1"), equalTo("c2"), equalTo("c3")));
+        assertThat(searchResponse.hits().getAt(1).id(), anyOf(equalTo("c1"), equalTo("c2"), equalTo("c3")));
+        assertThat(searchResponse.hits().getAt(2).id(), anyOf(equalTo("c1"), equalTo("c2"), equalTo("c3")));
     }
 
     @Test
