@@ -3,12 +3,21 @@ package org.elasticsearch.index.search.parent;
 import java.io.IOException;
 import java.util.Map;
 
+import org.apache.lucene.document.Document;
 import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.Term;
 import org.apache.lucene.search.Collector;
 import org.apache.lucene.search.DocIdSet;
 import org.apache.lucene.search.Filter;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.util.FixedBitSet;
+import org.elasticsearch.ElasticSearchIllegalArgumentException;
+import org.elasticsearch.common.BytesWrap;
+import org.elasticsearch.common.lucene.docset.GetDocSet;
+import org.elasticsearch.common.lucene.search.TermFilter;
+import org.elasticsearch.index.cache.id.IdReaderTypeCache;
+import org.elasticsearch.index.mapper.internal.ParentFieldMapper;
+import org.elasticsearch.script.SearchScript;
 import org.elasticsearch.search.internal.ScopePhase;
 import org.elasticsearch.search.internal.SearchContext;
 
@@ -23,14 +32,14 @@ public class HasParentFilter extends Filter implements ScopePhase.CollectorPhase
 
     private Query parentQuery;
     private String scope;
-    private String childType;
     private String parentType;
     private Map<Object, FixedBitSet> parentDocs;
     private final SearchContext context;
 
-    public HasParentFilter(Query parentQuery, String scope, SearchContext context) {
+    public HasParentFilter(Query parentQuery, String scope, String parentType, SearchContext context) {
         this.parentQuery = parentQuery;
         this.scope = scope;
+        this.parentType = parentType;
         this.context = context;
     }
 
@@ -70,9 +79,37 @@ public class HasParentFilter extends Filter implements ScopePhase.CollectorPhase
 
     @Override
     public DocIdSet getDocIdSet(IndexReader reader) throws IOException {
-        // TODO: OK, IndexReader is conceptually a list of children doc IDs. We
-        // need to massage it into a list of parent doc IDs, and then a bit
-        // set. Then we'll have two bit sets and all we need to do is call AND.
-        return null;
+        return new ChildDocSet(reader, context.idCache().reader(reader).type(parentType), parentDocs.get(reader.getCoreCacheKey()));
+    }
+
+    static class ChildDocSet extends GetDocSet {
+        private final IndexReader reader;
+        private final IdReaderTypeCache typeCache;
+        private final FixedBitSet parentIds;
+
+        public ChildDocSet(IndexReader reader, IdReaderTypeCache typeCache, FixedBitSet parentIds) {
+            super(reader.maxDoc());
+            this.reader = reader;
+            this.typeCache = typeCache;
+            this.parentIds = parentIds;
+        }
+
+        @Override
+        public long sizeInBytes() {
+            return 0;
+        }
+
+        @Override
+        public boolean isCacheable() {
+            // TODO?
+            return false;
+        }
+
+        @Override
+        public boolean get(int n) {
+            BytesWrap parentId = typeCache.parentIdByDoc(n);
+            int parentDocId = typeCache.docById(parentId);
+            return parentDocId != -1 && !reader.isDeleted(parentDocId) && parentIds.get(parentDocId);
+        }
     }
 }

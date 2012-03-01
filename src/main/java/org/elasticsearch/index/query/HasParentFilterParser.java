@@ -53,6 +53,7 @@ public class HasParentFilterParser implements FilterParser {
 
         Query query = null;
         String scope = null;
+        String parentType = null;
 
         String filterName = null;
         String currentFieldName = null;
@@ -67,7 +68,9 @@ public class HasParentFilterParser implements FilterParser {
                     throw new QueryParsingException(parseContext.index(), "[has_parent] filter does not support [" + currentFieldName + "]");
                 }
             } else if (token.isValue()) {
-                if ("_scope".equals(currentFieldName)) {
+                if ("type".equals(currentFieldName)) {
+                    parentType = parser.text();
+                } else if ("_scope".equals(currentFieldName)) {
                     scope = parser.text();
                 } else if ("_name".equals(currentFieldName)) {
                     filterName = parser.text();
@@ -79,10 +82,13 @@ public class HasParentFilterParser implements FilterParser {
         if (query == null) {
             throw new QueryParsingException(parseContext.index(), "[has_parent] filter requires 'query' field");
         }
+        if (parentType == null) {
+            throw new QueryParsingException(parseContext.index(), "[has_parent] filter requires 'type' field");
+        }
 
         SearchContext searchContext = SearchContext.current();
 
-        HasParentFilter parentFilter = new HasParentFilter(query, scope, searchContext);
+        HasParentFilter parentFilter = new HasParentFilter(query, scope, parentType, searchContext);
         searchContext.addScopePhase(parentFilter);
 
         if (filterName != null) {

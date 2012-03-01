@@ -85,14 +85,14 @@ public class SimpleParentQuerySearchTests extends AbstractNodesTests {
 
         // HAS PARENT FILTER
 
-        searchResponse = client.prepareSearch("test").setQuery(constantScoreQuery(hasParentFilter(termQuery("p_field", "p_value1")))).execute().actionGet();
+        searchResponse = client.prepareSearch("test").setQuery(constantScoreQuery(hasParentFilter("parent", termQuery("p_field", "p_value1")))).execute().actionGet();
         assertThat("Failures " + Arrays.toString(searchResponse.shardFailures()), searchResponse.shardFailures().length, equalTo(0));
         assertThat(searchResponse.failedShards(), equalTo(0));
         assertThat(searchResponse.hits().totalHits(), equalTo(2l));
         assertThat(searchResponse.hits().getAt(0).id(), anyOf(equalTo("c1"), equalTo("c2")));
         assertThat(searchResponse.hits().getAt(1).id(), anyOf(equalTo("c1"), equalTo("c2")));
 
-        searchResponse = client.prepareSearch("test").setQuery(constantScoreQuery(hasParentFilter(termQuery("p_field", "p_value_bad")))).execute().actionGet();
+        searchResponse = client.prepareSearch("test").setQuery(constantScoreQuery(hasParentFilter("parent", termQuery("p_field", "p_value_bad")))).execute().actionGet();
         if (searchResponse.failedShards() > 0) {
             logger.warn("Failed shards:");
             for (ShardSearchFailure shardSearchFailure : searchResponse.shardFailures()) {
@@ -102,7 +102,7 @@ public class SimpleParentQuerySearchTests extends AbstractNodesTests {
         assertThat(searchResponse.failedShards(), equalTo(0));
         assertThat(searchResponse.hits().totalHits(), equalTo(0L));
 
-        searchResponse = client.prepareSearch("test").setQuery(constantScoreQuery(hasParentFilter(termQuery("p_field", "p_value_2")))).execute().actionGet();
+        searchResponse = client.prepareSearch("test").setQuery(constantScoreQuery(hasParentFilter("parent", termQuery("p_field", "p_value2")))).execute().actionGet();
         assertThat("Failures " + Arrays.toString(searchResponse.shardFailures()), searchResponse.shardFailures().length, equalTo(0));
         assertThat(searchResponse.failedShards(), equalTo(0));
         assertThat(searchResponse.hits().totalHits(), equalTo(1l));

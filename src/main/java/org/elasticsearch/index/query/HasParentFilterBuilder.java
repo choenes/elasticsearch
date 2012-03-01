@@ -29,12 +29,14 @@ import java.io.IOException;
 public class HasParentFilterBuilder extends BaseFilterBuilder {
 
     private final QueryBuilder queryBuilder;
+    private final String parentType;
 
     private String scope;
 
     private String filterName;
 
-    public HasParentFilterBuilder(QueryBuilder queryBuilder) {
+    public HasParentFilterBuilder(String parentType, QueryBuilder queryBuilder) {
+        this.parentType = parentType;
         this.queryBuilder = queryBuilder;
     }
 
@@ -56,6 +58,7 @@ public class HasParentFilterBuilder extends BaseFilterBuilder {
         builder.startObject(HasParentFilterParser.NAME);
         builder.field("query");
         queryBuilder.toXContent(builder, params);
+        builder.field("type", parentType);
         if (scope != null) {
             builder.field("_scope", scope);
         }
