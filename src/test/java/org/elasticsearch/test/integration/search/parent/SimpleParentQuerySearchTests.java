@@ -44,6 +44,8 @@ import static org.hamcrest.Matchers.*;
  */
 public class SimpleParentQuerySearchTests extends AbstractNodesTests {
 
+    private final String INDEX = "test";
+
     private Client client;
 
     @BeforeClass
@@ -64,20 +66,17 @@ public class SimpleParentQuerySearchTests extends AbstractNodesTests {
 
     @Test
     public void simpleParentQuery() throws Exception {
-        client.admin().indices().prepareDelete().execute().actionGet();
-
-        client.admin().indices().prepareCreate("test").setSettings(ImmutableSettings.settingsBuilder().put("index.number_of_shards", 1)).execute().actionGet();
-        client.admin().cluster().prepareHealth().setWaitForGreenStatus().execute().actionGet();
-        client.admin().indices().preparePutMapping("test").setType("child").setSource(XContentFactory.jsonBuilder().startObject().startObject("type")
+        initializeCluster();
+        client.admin().indices().preparePutMapping(INDEX).setType("child").setSource(XContentFactory.jsonBuilder().startObject().startObject("type")
                 .startObject("_parent").field("type", "parent").endObject()
                 .endObject().endObject()).execute().actionGet();
 
         // index simple data
-        client.prepareIndex("test", "parent", "p1").setSource("p_field", "p_value1").execute().actionGet();
-        client.prepareIndex("test", "child", "c1").setSource("c_field", "red").setParent("p1").execute().actionGet();
-        client.prepareIndex("test", "child", "c2").setSource("c_field", "yellow").setParent("p1").execute().actionGet();
-        client.prepareIndex("test", "parent", "p2").setSource("p_field", "p_value2").execute().actionGet();
-        client.prepareIndex("test", "child", "c3").setSource("c_field", "blue").setParent("p2").execute().actionGet();
+        client.prepareIndex(INDEX, "parent", "p1").setSource("p_field", "p_value1").execute().actionGet();
+        client.prepareIndex(INDEX, "child", "c1").setSource("c_field", "red").setParent("p1").execute().actionGet();
+        client.prepareIndex(INDEX, "child", "c2").setSource("c_field", "yellow").setParent("p1").execute().actionGet();
+        client.prepareIndex(INDEX, "parent", "p2").setSource("p_field", "p_value2").execute().actionGet();
+        client.prepareIndex(INDEX, "child", "c3").setSource("c_field", "blue").setParent("p2").execute().actionGet();
 
         client.admin().indices().prepareRefresh().execute().actionGet();
 
@@ -85,14 +84,14 @@ public class SimpleParentQuerySearchTests extends AbstractNodesTests {
 
         // HAS PARENT FILTER
 
-        searchResponse = client.prepareSearch("test").setQuery(constantScoreQuery(hasParentFilter("parent", termQuery("p_field", "p_value1")))).execute().actionGet();
+        searchResponse = client.prepareSearch(INDEX).setQuery(constantScoreQuery(hasParentFilter("parent", termQuery("p_field", "p_value1")))).execute().actionGet();
         assertThat("Failures " + Arrays.toString(searchResponse.shardFailures()), searchResponse.shardFailures().length, equalTo(0));
         assertThat(searchResponse.failedShards(), equalTo(0));
         assertThat(searchResponse.hits().totalHits(), equalTo(2l));
         assertThat(searchResponse.hits().getAt(0).id(), anyOf(equalTo("c1"), equalTo("c2")));
         assertThat(searchResponse.hits().getAt(1).id(), anyOf(equalTo("c1"), equalTo("c2")));
 
-        searchResponse = client.prepareSearch("test").setQuery(constantScoreQuery(hasParentFilter("parent", termQuery("p_field", "p_value_bad")))).execute().actionGet();
+        searchResponse = client.prepareSearch(INDEX).setQuery(constantScoreQuery(hasParentFilter("parent", termQuery("p_field", "p_value_bad")))).execute().actionGet();
         if (searchResponse.failedShards() > 0) {
             logger.warn("Failed shards:");
             for (ShardSearchFailure shardSearchFailure : searchResponse.shardFailures()) {
@@ -102,10 +101,89 @@ public class SimpleParentQuerySearchTests extends AbstractNodesTests {
         assertThat(searchResponse.failedShards(), equalTo(0));
         assertThat(searchResponse.hits().totalHits(), equalTo(0L));
 
-        searchResponse = client.prepareSearch("test").setQuery(constantScoreQuery(hasParentFilter("parent", termQuery("p_field", "p_value2")))).execute().actionGet();
+        searchResponse = client.prepareSearch(INDEX).setQuery(constantScoreQuery(hasParentFilter("parent", termQuery("p_field", "p_value2")))).execute().actionGet();
         assertThat("Failures " + Arrays.toString(searchResponse.shardFailures()), searchResponse.shardFailures().length, equalTo(0));
         assertThat(searchResponse.failedShards(), equalTo(0));
         assertThat(searchResponse.hits().totalHits(), equalTo(1l));
         assertThat(searchResponse.hits().getAt(0).id(), equalTo("c3"));
+    }
+
+    @Test
+    public void simpleParentQuery2() throws Exception {
+        initializeCluster();
+        String parentSource = "{'changeset' : {'properties' : {'ixHostedDB' : {'type' : 'integer'}, 'sId' : {'type' : 'string'}}}}".replace('\'', '"');
+        String childSource = "{'changesetrepo' : {'properties' : {'ixRepo' : {'type' : 'integer'}}, '_parent' : {'type' : 'changeset'}}}".replace('\'', '"');
+        client.admin().indices().preparePutMapping(INDEX)
+            .setType("changeset")
+            .setSource(parentSource)
+            .execute()
+            .actionGet();
+        client.admin().indices().preparePutMapping(INDEX)
+            .setType("changesetrepo")
+            .setSource(childSource)
+            .execute()
+            .actionGet();
+
+        // Four parent documents: c1, c2, c3, c4.
+        // c1 has two parents: cr1 and cr2.
+        // c4 has two parents: cr1 and cr2.
+        client.prepareIndex(INDEX, "changeset", "c1")
+            .setSource("ixHostedDB", -1, "sId", "095520ef2aaa5d1e14d46296fdb2464f9b21dcaf")
+            .execute().actionGet();
+        client.prepareIndex(INDEX, "changeset", "c2")
+            .setSource("ixHostedDB", -2, "sId", "095520ef2aaa5d1e14d46296fdb2464f9b21dcaf")
+            .execute().actionGet();
+        client.prepareIndex(INDEX, "changeset", "c3")
+            .setSource("ixHostedDB", -1, "sId", "095520ef2aaa5d1e14d46296fdb2464f9b21dcafx")
+            .execute().actionGet();
+        client.prepareIndex(INDEX, "changeset", "c4")
+            .setSource("ixHostedDB", -1, "sId", "095520ef2aaa5d1e14d46296fdb2464f9b21dcaf")
+            .execute().actionGet();
+        client.prepareIndex(INDEX, "changesetrepo", "cr1")
+            .setSource("ixRepo", 330)
+            .setParent("c1")
+            .execute().actionGet();
+        client.prepareIndex(INDEX, "changesetrepo", "cr2")
+            .setSource("ixRepo", 331)
+            .setParent("c1")
+            .execute().actionGet();
+        client.prepareIndex(INDEX, "changesetrepo", "cr3")
+            .setSource("ixRepo", 330)
+            .setParent("c4")
+            .execute().actionGet();
+        client.prepareIndex(INDEX, "changesetrepo", "cr4")
+            .setSource("ixRepo", 331)
+            .setParent("c4")
+            .execute().actionGet();
+        client.admin().indices().prepareRefresh().execute().actionGet();
+
+        SearchResponse searchResponse;
+        String query, filter;
+
+        // Both queries should return cr1 and cr4.
+        query = "{'term':{'ixRepo':330}}".replace('\'', '"');
+        filter = "{'has_parent':{'type':'changeset', 'query':{'term':{'sId':'095520ef2aaa5d1e14d46296fdb2464f9b21dcaf'}}}}".replace('\'', '"');
+        searchResponse = client.prepareSearch(INDEX)
+                .setQuery(query)
+                .setSize(2000)
+                .setFilter(filter)
+                .execute().actionGet();
+        assertThat(searchResponse.failedShards(), equalTo(0));
+        assertThat(searchResponse.hits().totalHits(), equalTo(2L));
+
+        filter = "{'has_parent':{'type':'changeset', 'query':{'term':{'ixHostedDB':-1}}}}".replace('\'', '"');
+        searchResponse = client.prepareSearch(INDEX)
+                .setQuery(query)
+                .setSize(2000)
+                .setFilter(filter)
+                .execute().actionGet();
+        assertThat(searchResponse.failedShards(), equalTo(0));
+        assertThat(searchResponse.hits().totalHits(), equalTo(2L));
+    }
+
+    private void initializeCluster() {
+        client.admin().indices().prepareDelete().execute().actionGet();
+        client.admin().indices().prepareCreate(INDEX).setSettings(ImmutableSettings.settingsBuilder().put("index.number_of_shards", 1)).execute().actionGet();
+        client.admin().cluster().prepareHealth().setWaitForGreenStatus().execute().actionGet();
     }
 }
