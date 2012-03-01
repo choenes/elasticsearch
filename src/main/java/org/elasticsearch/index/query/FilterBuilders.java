@@ -367,6 +367,16 @@ public abstract class FilterBuilders {
         return new HasChildFilterBuilder(type, query);
     }
 
+    /**
+     * Constructs a parent filter, with the child type and the query to run against parent documents, with
+     * the result of the filter being the *child* documents.
+     *
+     * @param query The query to run against the parent type
+     */
+    public static HasParentFilterBuilder hasParentFilter(QueryBuilder query) {
+        return new HasParentFilterBuilder(query);
+    }
+
     public static BoolFilterBuilder boolFilter() {
         return new BoolFilterBuilder();
     }

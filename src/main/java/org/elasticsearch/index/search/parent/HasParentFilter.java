@@ -10,6 +10,7 @@ import org.apache.lucene.search.Filter;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.util.FixedBitSet;
 import org.elasticsearch.search.internal.ScopePhase;
+import org.elasticsearch.search.internal.SearchContext;
 
 // Strategy: naively collect parent documents into a bunch of FixedBitSets.
 // Then, at filter time, consult the FixedBitSet corresponding to the current
@@ -25,13 +26,12 @@ public class HasParentFilter extends Filter implements ScopePhase.CollectorPhase
     private String childType;
     private String parentType;
     private Map<Object, FixedBitSet> parentDocs;
+    private final SearchContext context;
 
-    public HasParentFilter(Query parentQuery, String scope, String childType, String parentType) {
+    public HasParentFilter(Query parentQuery, String scope, SearchContext context) {
         this.parentQuery = parentQuery;
         this.scope = scope;
-        // TODO: use these two values to write a toString().
-        this.childType = childType;
-        this.parentType = parentType;
+        this.context = context;
     }
 
     @Override
