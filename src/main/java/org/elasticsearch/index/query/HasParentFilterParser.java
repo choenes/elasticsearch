@@ -63,7 +63,14 @@ public class HasParentFilterParser implements FilterParser {
                 currentFieldName = parser.currentName();
             } else if (token == XContentParser.Token.START_OBJECT) {
                 if ("query".equals(currentFieldName)) {
-                    query = parseContext.parseInnerQuery();
+                    // TODO we need to set the type, but, `query` can come before `type`...
+                    // since we switch types, make sure we change the context
+                    String[] origTypes = QueryParseContext.setTypesWithPrevious(parentType == null ? null : new String[]{parentType});
+                    try {
+                        query = parseContext.parseInnerQuery();
+                    } finally {
+                        QueryParseContext.setTypes(origTypes);
+                    }
                 } else {
                     throw new QueryParsingException(parseContext.index(), "[has_parent] filter does not support [" + currentFieldName + "]");
                 }
