@@ -19,29 +19,25 @@
 
 package org.elasticsearch.test.integration.search.parent;
 
+import static org.elasticsearch.index.query.FilterBuilders.hasParentFilter;
+import static org.elasticsearch.index.query.QueryBuilders.constantScoreQuery;
+import static org.elasticsearch.index.query.QueryBuilders.termQuery;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.anyOf;
+import static org.hamcrest.Matchers.equalTo;
+
+import java.util.Arrays;
+
 import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.action.search.ShardSearchFailure;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.settings.ImmutableSettings;
 import org.elasticsearch.common.xcontent.XContentFactory;
-import org.elasticsearch.search.facet.terms.TermsFacet;
 import org.elasticsearch.test.integration.AbstractNodesTests;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
-import java.util.Arrays;
-
-import static org.elasticsearch.index.query.FilterBuilders.hasParentFilter;
-import static org.elasticsearch.index.query.QueryBuilders.*;
-import static org.elasticsearch.search.facet.FacetBuilders.termsFacet;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.*;
-
-/**
- *
- */
 public class SimpleParentQuerySearchTests extends AbstractNodesTests {
 
     private final String INDEX = "test";
@@ -114,79 +110,6 @@ public class SimpleParentQuerySearchTests extends AbstractNodesTests {
         assertThat(searchResponse.hits().getAt(0).id(), anyOf(equalTo("c1"), equalTo("c2"), equalTo("c3")));
         assertThat(searchResponse.hits().getAt(1).id(), anyOf(equalTo("c1"), equalTo("c2"), equalTo("c3")));
         assertThat(searchResponse.hits().getAt(2).id(), anyOf(equalTo("c1"), equalTo("c2"), equalTo("c3")));
-    }
-
-    @Test
-    public void simpleParentQuery2() throws Exception {
-        initializeCluster();
-        String parentSource = "{'changeset' : {'properties' : {'ixHostedDB' : {'type' : 'integer'}, 'sId' : {'type' : 'string'}}}}".replace('\'', '"');
-        String childSource = "{'changesetrepo' : {'properties' : {'ixRepo' : {'type' : 'integer'}}, '_parent' : {'type' : 'changeset'}}}".replace('\'', '"');
-        client.admin().indices().preparePutMapping(INDEX)
-            .setType("changeset")
-            .setSource(parentSource)
-            .execute()
-            .actionGet();
-        client.admin().indices().preparePutMapping(INDEX)
-            .setType("changesetrepo")
-            .setSource(childSource)
-            .execute()
-            .actionGet();
-
-        // Four parent documents: c1, c2, c3, c4.
-        // c1 has two parents: cr1 and cr2.
-        // c4 has two parents: cr1 and cr2.
-        client.prepareIndex(INDEX, "changeset", "c1")
-            .setSource("ixHostedDB", -1, "sId", "095520ef2aaa5d1e14d46296fdb2464f9b21dcaf")
-            .execute().actionGet();
-        client.prepareIndex(INDEX, "changeset", "c2")
-            .setSource("ixHostedDB", -2, "sId", "095520ef2aaa5d1e14d46296fdb2464f9b21dcaf")
-            .execute().actionGet();
-        client.prepareIndex(INDEX, "changeset", "c3")
-            .setSource("ixHostedDB", -1, "sId", "095520ef2aaa5d1e14d46296fdb2464f9b21dcafx")
-            .execute().actionGet();
-        client.prepareIndex(INDEX, "changeset", "c4")
-            .setSource("ixHostedDB", -1, "sId", "095520ef2aaa5d1e14d46296fdb2464f9b21dcaf")
-            .execute().actionGet();
-        client.prepareIndex(INDEX, "changesetrepo", "cr1")
-            .setSource("ixRepo", 330)
-            .setParent("c1")
-            .execute().actionGet();
-        client.prepareIndex(INDEX, "changesetrepo", "cr2")
-            .setSource("ixRepo", 331)
-            .setParent("c1")
-            .execute().actionGet();
-        client.prepareIndex(INDEX, "changesetrepo", "cr3")
-            .setSource("ixRepo", 330)
-            .setParent("c4")
-            .execute().actionGet();
-        client.prepareIndex(INDEX, "changesetrepo", "cr4")
-            .setSource("ixRepo", 331)
-            .setParent("c4")
-            .execute().actionGet();
-        client.admin().indices().prepareRefresh().execute().actionGet();
-
-        SearchResponse searchResponse;
-        String query, filter;
-
-        // Both queries should return cr1 and cr4.
-        query = "{'term':{'ixRepo':330}}".replace('\'', '"');
-        filter = "{'has_parent':{'type':'changeset', 'query':{'term':{'sId':'095520ef2aaa5d1e14d46296fdb2464f9b21dcaf'}}}}".replace('\'', '"');
-        searchResponse = client.prepareSearch(INDEX)
-                .setQuery(query)
-                .setSize(2000)
-                .setFilter(filter)
-                .execute().actionGet();
-        assertThat(searchResponse.failedShards(), equalTo(0));
-        assertThat(searchResponse.hits().totalHits(), equalTo(2L));
-
-        filter = "{'has_parent':{'type':'changeset', 'query':{'term':{'ixHostedDB':-1}}}}".replace('\'', '"');
-        searchResponse = client.prepareSearch(INDEX)
-                .setQuery(query)
-                .setSize(2000)
-                .setFilter(filter)
-                .execute().actionGet();
-        assertThat(searchResponse.failedShards(), equalTo(0));
-        assertThat(searchResponse.hits().totalHits(), equalTo(2L));
     }
 
     private void initializeCluster() {
